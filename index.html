@@ -1042,6 +1042,7 @@ const MapView = (() => {
       $image.src = CONFIG.mapImageUrl;
       $image.onload = () => {
         $loading.classList.add('hidden');
+        $placeholder.classList.add('hidden');
         renderPins();
       };
       $image.onerror = () => {
