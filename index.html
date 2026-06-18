@@ -782,12 +782,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.addEventListener('click', e => { if (!$boothSearch.parentElement.contains(e.target)) $dropdown.style.display='none'; });
 
+  /* ── 부스 이미지 로드 (URL → 로컬 파일 폴백) ── */
+  function loadBoothImage(booth, $img, $wrap) {
+    // 1순위: 스프레드시트에 imageUrl이 있으면 그걸 사용
+    if (booth.imageUrl) {
+      $img.src = booth.imageUrl;
+      $img.style.display = 'block';
+      $wrap.style.display = 'block';
+      $img.onerror = () => tryLocalImage(booth, $img, $wrap);
+      return;
+    }
+    // 2순위: 로컬 images/{id}.확장자 탐색
+    tryLocalImage(booth, $img, $wrap);
+  }
+
+  function tryLocalImage(booth, $img, $wrap) {
+    const exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    let idx = 0;
+    function tryNext() {
+      if (idx >= exts.length) {
+        // 모두 실패 → 이미지 영역 숨김
+        $wrap.style.display = 'none';
+        return;
+      }
+      const ext = exts[idx++];
+      $img.onload  = () => { $wrap.style.display = 'block'; $img.style.display = 'block'; };
+      $img.onerror = tryNext;
+      $img.src = `./images/${booth.id}.${ext}`;
+    }
+    tryNext();
+  }
+
   /* ── 부스 상세 모달 ── */
   function openBoothModal(booth) {
     currentBooth = booth;
     const user = Storage.getCurrentUser();
-    if (booth.imageUrl) { $boothImg.src=booth.imageUrl; $boothImgWrap.style.display='block'; }
-    else { $boothImgWrap.style.display='none'; }
+    loadBoothImage(booth, $boothImg, $boothImgWrap);
     $boothNumber.textContent = booth.number ? `부스 ${booth.number}` : '';
     $boothName.textContent   = booth.name;
     $boothDesc.textContent   = booth.description || '설명이 없습니다.';
@@ -841,8 +871,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     $empty.classList.add('hidden');
     list.forEach(booth => {
       const card = document.createElement('div'); card.className = 'wish-card';
-      const img = document.createElement('img'); img.className='wish-card-img'; img.src=booth.imageUrl||''; img.alt=booth.name;
-      img.onerror = () => { img.style.background='#e8e4d9'; img.src=''; };
+      const img = document.createElement('img'); img.className='wish-card-img'; img.alt=booth.name;
+      img.src = booth.imageUrl || `./images/${booth.id}.jpg`;
+      img.onerror = () => {
+        const exts = ['jpeg','png','webp','gif'];
+        let idx = 0;
+        function tryNext() {
+          if (idx >= exts.length) { img.style.display='none'; return; }
+          img.onerror = tryNext;
+          img.src = `./images/${booth.id}.${exts[idx++]}`;
+        }
+        tryNext();
+      };
       const body = document.createElement('div'); body.className='wish-card-body';
       body.innerHTML = `<div class="wish-card-number">${booth.number}</div><div class="wish-card-name">${booth.name}</div><div class="wish-card-desc">${booth.description}</div>`;
       const rm = document.createElement('button'); rm.className='wish-card-remove'; rm.textContent='위시리스트에서 제거';
