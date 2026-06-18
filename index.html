@@ -321,7 +321,7 @@ body { font-family: var(--font-sans); background: var(--cream); color: var(--ink
   </div>
   <div class="map-container">
     <div id="map-wrapper">
-      <img id="map-image" src="./map.jpg" alt="서울국제도서전 부스 배치도" />
+      <img id="map-image" src="./map2.jpg" alt="서울국제도서전 부스 배치도" />
       <div id="booth-pins"></div>
     </div>
     <div id="map-loading" class="map-loading hidden">
@@ -387,7 +387,7 @@ body { font-family: var(--font-sans); background: var(--cream); color: var(--ink
 const CONFIG = {
   mapImageUrl: './map2.jpg',
   boothsSheetUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTdQBBHGojc7XSPCWzKTSl4u1scFaKbR1-3qMCBxTshFSb9_W5uySEDwefZ1QObZDaxbhEPIutTY8fk/pub?output=csv',
-  scheduleSheetUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTdQBBHGojc7XSPCWzKTSl4u1scFaKbR1-3qMCBxTshFSb9_W5uySEDwefZ1QObZDaxbhEPIutTY8fk/pub?output=csv',
+  scheduleSheetUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuz_JgZW5SMRyvfw8sDALsV7AepyBEs2Ri7AScRwq66-2tMt1acDvIipY2DbfOGEx3cReWyKH6AEZR/pub?output=csv',
   eventDays: [
     { label: '6/24 수', date: '2026-06-24' },
     { label: '6/25 목', date: '2026-06-25' },
@@ -687,7 +687,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }, 0);
     }
-    }, 0);
   }
 
   /* ── 부스 리스트 렌더링 ── */
