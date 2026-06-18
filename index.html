@@ -119,7 +119,8 @@ body { font-family: var(--font-sans); background: var(--cream); color: var(--ink
   background: var(--sepia-dark); /* 기본: 리스트 선택 */
 }
 .booth-pin:hover { transform: translate(-50%,-50%) scale(1.35); z-index: 10; }
-.booth-pin.wish { background: var(--wish); } /* 위시리스트 */
+.booth-pin.wish { background: var(--wish); } /* 전부 위시리스트 → 빨간 */
+.booth-pin.mixed { background: var(--sepia-dark); } /* 위시+선택 혼합 → 세피아 */
 .booth-pin-label { color: white; font-size: 7px; font-weight: 700; line-height: 1; text-align: center; pointer-events: none; user-select: none; max-width: 18px; overflow: hidden; }
 
 .map-loading, .map-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--cream-dark); }
@@ -311,8 +312,8 @@ body { font-family: var(--font-sans); background: var(--cream); color: var(--ink
 <section id="view-map" class="view active">
   <div class="map-toolbar">
     <div class="map-legend">
-      <span class="legend-item"><span class="dot dot-active"></span> 선택한 부스</span>
-      <span class="legend-item"><span class="dot dot-wish"></span> 위시리스트</span>
+      <span class="legend-item"><span class="dot dot-wish"></span> 위시리스트 (전체)</span>
+      <span class="legend-item"><span class="dot dot-active"></span> 혼합 / 선택</span>
     </div>
     <div class="map-search" style="position:relative;">
       <input type="text" id="booth-search" placeholder="부스명 또는 번호 검색…" class="search-input" />
@@ -551,6 +552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* ── 지도 핀 렌더링 ── */
   /* 지도에 표시 기준: 위시리스트에 있거나 activeOnMap에 있는 부스만
      같은 pinX/pinY에 여러 부스가 있으면 그룹 핀으로 묶어서 표시 */
+  // 현재 열린 그룹 팝업 정보 (위시 토글 후 재오픈용)
+  let _lastGroupPopup = null;
+
   function renderPins() {
     $mapPins.innerHTML = '';
     const user    = Storage.getCurrentUser();
@@ -572,16 +576,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     Object.entries(groups).forEach(([key, booths]) => {
       const [px, py] = key.split('_');
-      // 그룹 내에 위시리스트 부스가 하나라도 있으면 빨간 핀
-      const hasWish = booths.some(b => wishIds.has(b.id));
-      const count   = booths.length;
+      const count    = booths.length;
+      const allWish  = booths.every(b => wishIds.has(b.id));  // 전부 위시리스트
+      const hasWish  = booths.some(b => wishIds.has(b.id));   // 일부라도 위시리스트
 
       const pin = document.createElement('div');
-      pin.className = 'booth-pin' + (hasWish ? ' wish' : '');
+      // 전부 위시 → 빨간, 일부 위시(혼합) → 세피아, 위시 없음 → 기본 세피아
+      if (allWish)       pin.className = 'booth-pin wish';
+      else if (hasWish)  pin.className = 'booth-pin mixed';  // 혼합
+      else               pin.className = 'booth-pin';
       pin.style.left = px + '%';
       pin.style.top  = py + '%';
 
-      // 여러 부스면 숫자 뱃지, 하나면 부스번호 표시
       if (count > 1) {
         pin.style.width  = '28px';
         pin.style.height = '28px';
@@ -593,10 +599,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         label.textContent = count;
         pin.appendChild(label);
 
-        // 클릭 시 그룹 팝업 표시
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
-          showGroupPopup(booths, px, py, pin);
+          showGroupPopup(booths, px, py);
         });
       } else {
         pin.title = `${booths[0].number} ${booths[0].name}`;
@@ -609,11 +614,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       $mapPins.appendChild(pin);
     });
+
+    // 위시 토글 후 같은 팝업 다시 열기
+    if (_lastGroupPopup) {
+      const { booths, px, py } = _lastGroupPopup;
+      _lastGroupPopup = null;
+      // 해당 좌표의 그룹이 아직 visible한지 확인
+      const stillVisible = booths.some(b => wishIds.has(b.id) || activeOnMap.has(b.id));
+      if (stillVisible) showGroupPopup(booths, px, py, true);
+    }
   }
 
   /* 같은 위치 그룹 팝업 */
-  function showGroupPopup(booths, px, py, pinEl) {
-    // 기존 팝업 제거
+  function showGroupPopup(booths, px, py, fromWishToggle = false) {
     document.querySelectorAll('.group-popup').forEach(el => el.remove());
 
     const popup = document.createElement('div');
@@ -628,7 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       border-radius:12px;
       box-shadow:0 8px 24px rgba(0,0,0,.18);
       z-index:50;
-      min-width:180px;
+      min-width:200px;
       padding:8px 0;
       pointer-events:all;
     `;
@@ -636,7 +649,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const user    = Storage.getCurrentUser();
     const wishIds = new Set(Storage.getWishlist(user));
 
-    // 제목
     const title = document.createElement('div');
     title.style.cssText = 'padding:6px 14px 8px;font-size:11px;font-weight:700;color:#999;letter-spacing:.08em;border-bottom:1px solid #f0ece0;';
     title.textContent = `📍 ${booths.length}개 부스`;
@@ -648,12 +660,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       row.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .12s;';
       row.innerHTML = `
         <span style="background:${isWish?'#e8523a':'#2e3192'};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0;">${booth.number}</span>
-        <span style="font-size:13px;color:#1a1a2e;flex:1;">${booth.name}</span>
-        ${isWish ? '<span style="font-size:12px;">⭐</span>' : ''}
+        <span style="font-size:13px;color:#1a1a2e;flex:1;line-height:1.3;">${booth.name}</span>
+        <span style="font-size:12px;flex-shrink:0;">${isWish ? '⭐' : ''}</span>
       `;
       row.addEventListener('mouseenter', () => row.style.background = '#faf8f2');
       row.addEventListener('mouseleave', () => row.style.background = '');
       row.addEventListener('click', () => {
+        // 팝업 위치 정보를 기억해두고 모달 열기
+        _lastGroupPopup = { booths, px, py };
         popup.remove();
         openBoothModal(booth);
       });
@@ -662,12 +676,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     $mapPins.appendChild(popup);
 
-    // 팝업 외부 클릭 시 닫기
-    setTimeout(() => {
-      document.addEventListener('click', function closePopup() {
-        popup.remove();
-        document.removeEventListener('click', closePopup);
-      });
+    if (!fromWishToggle) {
+      setTimeout(() => {
+        document.addEventListener('click', function closePopup(e) {
+          if (!popup.contains(e.target)) {
+            popup.remove();
+            _lastGroupPopup = null;
+            document.removeEventListener('click', closePopup);
+          }
+        });
+      }, 0);
+    }
     }, 0);
   }
 
